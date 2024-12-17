@@ -140,6 +140,9 @@ where
         if let Some(block_range) = targets.receipts.clone() {
             segments.push((Box::new(segments::Receipts), block_range));
         }
+        if let Some(block_range) = targets.block_meta.clone() {
+            segments.push((Box::new(segments::BlockMeta), block_range));
+        }
 
         segments.par_iter().try_for_each(|(segment, block_range)| -> ProviderResult<()> {
             debug!(target: "static_file", segment = %segment.segment(), ?block_range, "StaticFileProducer segment");

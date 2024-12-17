@@ -6,7 +6,7 @@ use alloy_consensus::BlockHeader;
 use alloy_primitives::{BlockHash, BlockNumber, TxNumber, U256};
 use parking_lot::{lock_api::RwLockWriteGuard, RawRwLock, RwLock};
 use reth_codecs::Compact;
-use reth_db::models::StoredBlockBodyIndices;
+use reth_db::models::{StoredBlockBodyIndices, StoredBlockOmmers, StoredBlockWithdrawals};
 use reth_db_api::models::CompactU256;
 use reth_nippy_jar::{NippyJar, NippyJarError, NippyJarWriter};
 use reth_node_types::NodePrimitives;
@@ -557,9 +557,25 @@ impl<N: NodePrimitives> StaticFileProviderRW<N> {
         Ok(())
     }
 
+    /// Appends [`StoredBlockBodyIndices`], [`StoredBlockOmmers`] and [`StoredBlockWithdrawals`] to
+    /// static file.
+    ///
+    /// It **CALLS** `increment_block()` since it's a block based segment.
+    pub fn append_eth_block_meta(
+        &mut self,
+        body_indices: &StoredBlockBodyIndices,
+        ommers: &StoredBlockOmmers<N::BlockHeader>,
+        withdrawals: &StoredBlockWithdrawals,
+        expected_block_number: BlockNumber,
+    ) -> ProviderResult<()>
+    where
+        N::BlockHeader: Compact,
+    {
+        self.append_block_meta(body_indices, ommers, withdrawals, expected_block_number)
+    }
+
     /// Appends [`StoredBlockBodyIndices`] and any other two arbitrary types belonging to the block
-    /// body ([`reth_db::models::StoredBlockOmmers`] and
-    /// [`reth_db::models::StoredBlockWithdrawals`] on ethereum) to static file.
+    /// body to static file.
     ///
     /// It **CALLS** `increment_block()` since it's a block based segment.
     pub fn append_block_meta<F1, F2>(
@@ -873,6 +889,10 @@ fn create_jar(
     // Transaction and Receipt already have the compression scheme used natively in its encoding.
     // (zstd-dictionary)
     if segment.is_headers() {
+        jar = jar.with_lz4();
+    }
+
+    if segment.is_block_meta() {
         jar = jar.with_lz4();
     }
 
